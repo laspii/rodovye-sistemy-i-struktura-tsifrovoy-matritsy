@@ -1,0 +1,574 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { PlayCircle, CheckCircle, RotateCcw, HelpCircle, Trophy, Info } from 'lucide-react';
+
+// --- КОНФИГУРАЦИЯ ДАННЫХ (JSON СПИСОК) ---
+// Вы можете редактировать этот список, добавляя свои слова.
+const WORD_DATA = [
+  {
+    word: "СИСТЕМА",
+    desc: "То, что рассматривается на занятии, связанное с родом, управляющее каналами.",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=2"
+  },
+  {
+    word: "РОД",
+    desc: "Совокупность физических и звездных каналов, которые должны быть связаны на 100%.",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=29"
+  },
+  {
+    word: "ДУША",
+    desc: "То, что спускается, заземляется и воплощается в тело.",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=52"
+  },
+  {
+    word: "ТРАВНИК",
+    desc: "Пример звездного рода, который занимается сбором растений.",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=105"
+  },
+  {
+    word: "ДИНАСТИЯ",
+    desc: "Семья, где из поколения в поколение занимаются одним чем-то (например, ювелиры).",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=148"
+  },
+  {
+    word: "МАГ",
+    desc: "Человек, который знает все обо всем и идет через знание и управление процессами.",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=234"
+  },
+  {
+    word: "ЗЕМЛЕДЕЛЕЦ",
+    desc: "Пример рода, связанный с взаимодействием с землей (в него воплотился автор).",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=246"
+  },
+  {
+    word: "ДНК",
+    desc: "Спираль, которая служит примером соединения земного и звездного рода.",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=368"
+  },
+  {
+    word: "ИСТОК",
+    desc: "Первородная энергия, которая спустилась на землю первой; также начало всех родов.",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=442"
+  },
+  {
+    word: "ТВОРЕЦ",
+    desc: "Тот, кто стоит во главе всех родов в мироздании.",
+    videoUrl: "https://youtu.be/ufn7K9H3Nlc?t=1481"
+  }
+];
+
+// --- ЛОГИКА ГЕНЕРАЦИИ КРОССВОРДА ---
+
+const generateCrossword = (wordsInput) => {
+  // Сортируем слова по длине (сначала длинные проще разместить)
+  const sortedWords = [...wordsInput].sort((a, b) => b.word.length - a.word.length);
+  
+  const gridSize = 20;
+  const grid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(null));
+  const placedWords = [];
+
+  const canPlaceWord = (word, row, col, direction) => {
+    if (direction === 'horizontal') {
+      if (col + word.length > gridSize) return false;
+      for (let i = 0; i < word.length; i++) {
+        const cell = grid[row][col + i];
+        if (cell && cell !== word[i]) return false;
+        
+        // Проверка соседей (чтобы слова не слипались боками, если это не пересечение)
+        // Это упрощенная проверка
+      }
+    } else {
+      if (row + word.length > gridSize) return false;
+      for (let i = 0; i < word.length; i++) {
+        const cell = grid[row + i][col];
+        if (cell && cell !== word[i]) return false;
+      }
+    }
+    return true;
+  };
+
+  const placeWord = (wordObj, row, col, direction) => {
+    const { word } = wordObj;
+    for (let i = 0; i < word.length; i++) {
+      if (direction === 'horizontal') {
+        grid[row][col + i] = word[i];
+      } else {
+        grid[row + i][col] = word[i];
+      }
+    }
+    placedWords.push({
+      ...wordObj,
+      row,
+      col,
+      direction,
+      id: placedWords.length + 1,
+      length: word.length
+    });
+  };
+
+  // Размещаем первое слово в центре
+  const firstWord = sortedWords[0];
+  const startRow = Math.floor(gridSize / 2);
+  const startCol = Math.floor((gridSize - firstWord.word.length) / 2);
+  placeWord(firstWord, startRow, startCol, 'horizontal');
+
+  // Пытаемся разместить остальные
+  for (let i = 1; i < sortedWords.length; i++) {
+    const currentWordObj = sortedWords[i];
+    const currentWord = currentWordObj.word;
+    let placed = false;
+
+    // Ищем пересечения с уже размещенными словами
+    for (const placedWord of placedWords) {
+      if (placed) break;
+      
+      // Проходим по буквам уже размещенного слова
+      for (let j = 0; j < placedWord.length; j++) {
+        const charOnBoard = placedWord.word[j];
+        // Ищем эту букву в текущем слове
+        for (let k = 0; k < currentWord.length; k++) {
+          if (currentWord[k] === charOnBoard) {
+            // Потенциальное пересечение
+            const newDirection = placedWord.direction === 'horizontal' ? 'vertical' : 'horizontal';
+            let newRow, newCol;
+
+            if (newDirection === 'vertical') {
+              newRow = placedWord.row - k; // Сдвигаем начало слова вверх
+              newCol = placedWord.col + j; // Колонка совпадает с буквой пересечения
+            } else {
+              newRow = placedWord.row + j;
+              newCol = placedWord.col - k;
+            }
+
+            // Проверяем границы и валидность
+            if (newRow >= 0 && newCol >= 0 && canPlaceWord(currentWord, newRow, newCol, newDirection)) {
+              placeWord(currentWordObj, newRow, newCol, newDirection);
+              placed = true;
+              break;
+            }
+          }
+        }
+        if (placed) break;
+      }
+    }
+  }
+
+  // Обрезаем сетку до минимальных размеров для отображения
+  let minRow = gridSize, maxRow = 0, minCol = gridSize, maxCol = 0;
+  let hasContent = false;
+  for(let r=0; r<gridSize; r++) {
+    for(let c=0; c<gridSize; c++) {
+      if(grid[r][c]) {
+        hasContent = true;
+        if(r < minRow) minRow = r;
+        if(r > maxRow) maxRow = r;
+        if(c < minCol) minCol = c;
+        if(c > maxCol) maxCol = c;
+      }
+    }
+  }
+
+  // Если ничего не разместилось (редкий случай), возвращаем пустой
+  if (!hasContent) return { grid: [], placedWords: [], rows: 0, cols: 0 };
+
+  // Создаем новую обрезанную сетку
+  const finalRows = maxRow - minRow + 1;
+  const finalCols = maxCol - minCol + 1;
+  const finalGrid = Array(finalRows).fill(null).map(() => Array(finalCols).fill(null));
+
+  placedWords.forEach(pw => {
+    pw.row -= minRow;
+    pw.col -= minCol;
+    // Заполняем сетку объектами ячеек, чтобы хранить ID слов
+    for(let i=0; i<pw.length; i++) {
+      const r = pw.direction === 'horizontal' ? pw.row : pw.row + i;
+      const c = pw.direction === 'horizontal' ? pw.col + i : pw.col;
+      
+      if (!finalGrid[r][c]) {
+        finalGrid[r][c] = { char: pw.word[i], wordIds: [] };
+      }
+      finalGrid[r][c].wordIds.push(pw.id);
+    }
+  });
+
+  return { grid: finalGrid, placedWords, rows: finalRows, cols: finalCols };
+};
+
+// --- ЛОГИКА БЫКИ И КОРОВЫ ---
+
+const calculateBullsAndCows = (guessWord, targetWord) => {
+  if (!guessWord || !targetWord) return { bulls: 0, cows: 0 };
+  
+  const guess = guessWord.toUpperCase().split('');
+  const target = targetWord.toUpperCase().split('');
+  
+  // Обрезаем или дополняем до длины целевого слова (хотя в кроссворде длина фиксирована)
+  const length = target.length;
+  
+  let bulls = 0;
+  let cows = 0;
+
+  const guessFlags = Array(length).fill(false);
+  const targetFlags = Array(length).fill(false);
+
+  // 1. Ищем быков (совпадение буквы и позиции)
+  for (let i = 0; i < length; i++) {
+    if (guess[i] === target[i]) {
+      bulls++;
+      guessFlags[i] = true;
+      targetFlags[i] = true;
+    }
+  }
+
+  // 2. Ищем коров (совпадение буквы, но не позиции)
+  for (let i = 0; i < Math.min(guess.length, length); i++) {
+    if (guessFlags[i]) continue; // Уже бык
+
+    for (let j = 0; j < length; j++) {
+      if (!targetFlags[j] && guess[i] === target[j]) {
+        cows++;
+        targetFlags[j] = true; // Помечаем использованной в таргете
+        break;
+      }
+    }
+  }
+
+  return { bulls, cows };
+};
+
+// --- ОСНОВНОЙ КОМПОНЕНТ ---
+
+export default function CrosswordApp() {
+  const [layout, setLayout] = useState(null);
+  const [userGrid, setUserGrid] = useState([]); // То, что ввел пользователь
+  const [selectedCell, setSelectedCell] = useState(null); // {r, c}
+  const [activeWordId, setActiveWordId] = useState(null);
+  const [direction, setDirection] = useState('horizontal'); // Направление ввода
+  const [gameMessage, setGameMessage] = useState(null);
+  const [solvedWords, setSolvedWords] = useState([]);
+
+  // Инициализация
+  useEffect(() => {
+    regenerate();
+  }, []);
+
+  const regenerate = () => {
+    const data = generateCrossword(WORD_DATA);
+    setLayout(data);
+    
+    // Создаем пустую пользовательскую сетку
+    const emptyGrid = Array(data.rows).fill(null).map(() => Array(data.cols).fill(''));
+    setUserGrid(emptyGrid);
+    
+    setSelectedCell(null);
+    setActiveWordId(null);
+    setGameMessage(null);
+    setSolvedWords([]);
+  };
+
+  // Получить текущее активное слово из метаданных
+  const activeWordData = useMemo(() => {
+    if (!activeWordId || !layout) return null;
+    return layout.placedWords.find(w => w.id === activeWordId);
+  }, [activeWordId, layout]);
+
+  // Получить слово, которое ввел пользователь для активного ID
+  const getUserInputForActiveWord = () => {
+    if (!activeWordData) return "";
+    let input = "";
+    for (let i = 0; i < activeWordData.length; i++) {
+      const r = activeWordData.direction === 'horizontal' ? activeWordData.row : activeWordData.row + i;
+      const c = activeWordData.direction === 'horizontal' ? activeWordData.col + i : activeWordData.col;
+      input += userGrid[r][c] || " ";
+    }
+    return input.trim(); // trim на случай если не дописали
+  };
+
+  const handleCellClick = (r, c) => {
+    const cellData = layout.grid[r][c];
+    if (!cellData) return;
+
+    // Логика выбора направления и слова
+    let newWordId = activeWordId;
+    let newDirection = direction;
+
+    // Если кликнули на ту же клетку, меняем направление (если возможно)
+    if (selectedCell?.r === r && selectedCell?.c === c) {
+      newDirection = direction === 'horizontal' ? 'vertical' : 'horizontal';
+    }
+
+    // Находим подходящее слово для клетки
+    const possibleWords = layout.placedWords.filter(w => w.id && cellData.wordIds.includes(w.id));
+    
+    // Пытаемся найти слово, соответствующее текущему направлению
+    const wordInDirection = possibleWords.find(w => w.direction === newDirection);
+    
+    if (wordInDirection) {
+      newWordId = wordInDirection.id;
+    } else if (possibleWords.length > 0) {
+      // Если в этом направлении слова нет, берем первое доступное и меняем направление
+      newWordId = possibleWords[0].id;
+      newDirection = possibleWords[0].direction;
+    }
+
+    setSelectedCell({ r, c });
+    setDirection(newDirection);
+    setActiveWordId(newWordId);
+    setGameMessage(null);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!selectedCell) return;
+    
+    const { r, c } = selectedCell;
+    const { key } = e;
+
+    if (key === 'Backspace') {
+      const newGrid = [...userGrid];
+      newGrid[r][c] = '';
+      setUserGrid(newGrid);
+      moveCursor(-1);
+    } else if (key.length === 1 && key.match(/[а-яА-Яa-zA-Z]/)) {
+      const newGrid = [...userGrid];
+      newGrid[r][c] = key.toUpperCase();
+      setUserGrid(newGrid);
+      moveCursor(1);
+    } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+        e.preventDefault();
+        navigateGrid(key);
+    }
+  };
+
+  const navigateGrid = (key) => {
+      if(!selectedCell) return;
+      let { r, c } = selectedCell;
+      if (key === 'ArrowUp') r--;
+      if (key === 'ArrowDown') r++;
+      if (key === 'ArrowLeft') c--;
+      if (key === 'ArrowRight') c++;
+
+      // Проверка границ
+      if (r >= 0 && r < layout.rows && c >= 0 && c < layout.cols && layout.grid[r][c]) {
+          handleCellClick(r, c);
+      }
+  }
+
+  const moveCursor = (step) => {
+    if (!activeWordData) return;
+    
+    // Определяем индекс текущей клетки внутри слова
+    let currentIndex = -1;
+    if (activeWordData.direction === 'horizontal') {
+        currentIndex = selectedCell.c - activeWordData.col;
+    } else {
+        currentIndex = selectedCell.r - activeWordData.row;
+    }
+
+    let nextIndex = currentIndex + step;
+    if (nextIndex >= 0 && nextIndex < activeWordData.length) {
+        const nextR = activeWordData.direction === 'horizontal' ? activeWordData.row : activeWordData.row + nextIndex;
+        const nextC = activeWordData.direction === 'horizontal' ? activeWordData.col + nextIndex : activeWordData.col;
+        setSelectedCell({ r: nextR, c: nextC });
+    }
+  };
+
+  const checkBullsAndCows = () => {
+    if (!activeWordData) return;
+
+    const userInput = getUserInputForActiveWord();
+    const targetWord = activeWordData.word;
+
+    // Проверка на полную длину
+    if (userInput.length !== targetWord.length) {
+      setGameMessage({ type: 'error', text: `Заполните все буквы слова (${targetWord.length} букв)!` });
+      return;
+    }
+
+    const result = calculateBullsAndCows(userInput, targetWord);
+    
+    if (result.bulls === targetWord.length) {
+        setGameMessage({ type: 'success', text: `Поздравляем! Слово "${targetWord}" разгадано верно!` });
+        if (!solvedWords.includes(activeWordId)) {
+            setSolvedWords([...solvedWords, activeWordId]);
+        }
+    } else {
+        setGameMessage({ 
+            type: 'info', 
+            text: `Быки (верно и на месте): ${result.bulls}, Коровы (верно, но не там): ${result.cows}` 
+        });
+    }
+  };
+
+  if (!layout) return <div className="flex justify-center items-center h-screen">Генерация...</div>;
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 font-sans text-slate-800">
+      <header className="max-w-6xl mx-auto mb-6 flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm">
+        <div>
+            <h1 className="text-2xl font-bold text-indigo-700 flex items-center gap-2">
+                <Trophy className="w-8 h-8" />
+                Канадский эзотерический Кроссворд
+            </h1>
+            <p className="text-sm text-gray-500">Отгадывай слова и используй механику "Быки и Коровы" для проверки</p>
+        </div>
+        <button 
+            onClick={regenerate}
+            className="mt-4 md:mt-0 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center gap-2 text-sm transition"
+        >
+            <RotateCcw className="w-4 h-4" /> Пересобрать
+        </button>
+      </header>
+
+      <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* --- ЛЕВАЯ КОЛОНКА: Сетка --- */}
+        <div className="lg:col-span-7 flex flex-col items-center">
+          <div 
+            className="bg-white p-4 rounded-xl shadow-lg overflow-auto max-w-full border border-gray-200"
+            style={{
+                display: 'grid',
+                gridTemplateRows: `repeat(${layout.rows}, 36px)`,
+                gridTemplateColumns: `repeat(${layout.cols}, 36px)`,
+                gap: '2px'
+            }}
+          >
+            {layout.grid.map((row, rIndex) => 
+              row.map((cell, cIndex) => {
+                if (!cell) return <div key={`${rIndex}-${cIndex}`} className="bg-transparent"></div>;
+                
+                const isSelected = selectedCell?.r === rIndex && selectedCell?.c === cIndex;
+                const isRelated = activeWordId && cell.wordIds.includes(activeWordId);
+                const isSolved = cell.wordIds.every(id => solvedWords.includes(id));
+
+                let bgColor = 'bg-white';
+                if (isSelected) bgColor = 'bg-indigo-200';
+                else if (isRelated) bgColor = 'bg-indigo-50';
+                else if (isSolved) bgColor = 'bg-green-50';
+
+                return (
+                  <div 
+                    key={`${rIndex}-${cIndex}`}
+                    onClick={() => handleCellClick(rIndex, cIndex)}
+                    className={`
+                        ${bgColor} border border-gray-300 flex items-center justify-center 
+                        text-lg font-bold cursor-pointer select-none transition-colors
+                        ${isSolved ? 'text-green-700' : 'text-slate-800'}
+                        focus:outline-none
+                    `}
+                  >
+                    {/* Псевдо-инпут для захвата фокуса клавиатуры */}
+                    {isSelected && (
+                        <input 
+                            autoFocus
+                            className="opacity-0 absolute w-0 h-0"
+                            onKeyDown={handleKeyDown}
+                            onBlur={() => {/* Можно убрать выделение, но для удобства оставим */}}
+                        />
+                    )}
+                    {userGrid[rIndex][cIndex]}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Панель управления Быками и Коровами */}
+          <div className="mt-6 w-full max-w-md bg-white p-4 rounded-xl shadow border border-indigo-100">
+            <h3 className="font-semibold mb-2 text-indigo-900 flex items-center gap-2">
+                <HelpCircle className="w-5 h-5" /> Проверка слова
+            </h3>
+            {activeWordData ? (
+                <>
+                    <p className="text-sm mb-3 text-gray-600">
+                        Выделено: <span className="font-bold">{activeWordData.length} букв</span> ({activeWordData.direction === 'horizontal' ? 'По горизонтали' : 'По вертикали'})
+                    </p>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={checkBullsAndCows}
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg font-medium transition flex justify-center items-center gap-2"
+                        >
+                            <CheckCircle className="w-5 h-5" />
+                            Проверить (Быки/Коровы)
+                        </button>
+                    </div>
+                </>
+            ) : (
+                <p className="text-sm text-gray-400 italic">Выберите слово в сетке, чтобы проверить его.</p>
+            )}
+
+            {/* Сообщения игры */}
+            {gameMessage && (
+                <div className={`mt-4 p-3 rounded-lg text-sm border ${
+                    gameMessage.type === 'success' ? 'bg-green-100 border-green-200 text-green-800' :
+                    gameMessage.type === 'error' ? 'bg-red-100 border-red-200 text-red-800' :
+                    'bg-blue-100 border-blue-200 text-blue-800'
+                }`}>
+                    {gameMessage.text}
+                </div>
+            )}
+          </div>
+        </div>
+
+        {/* --- ПРАВАЯ КОЛОНКА: Список вопросов --- */}
+        <div className="lg:col-span-5 flex flex-col gap-4 h-[calc(100vh-150px)] overflow-y-auto pr-2">
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg text-sm text-yellow-800 mb-2">
+            <h4 className="font-bold flex items-center gap-2"><Info className="w-4 h-4"/> Как играть?</h4>
+            <ul className="list-disc list-inside mt-1 space-y-1">
+                <li>Кликните по клетке, чтобы выбрать слово.</li>
+                <li>Вводите буквы с клавиатуры.</li>
+                <li>Если сомневаетесь — нажмите ссылку <strong>Видео-подсказка</strong>.</li>
+                <li>Используйте кнопку <strong>Проверить</strong>, чтобы узнать сколько "Быков" (верных букв на своих местах) и "Коров" (верных букв не на своих местах).</li>
+            </ul>
+          </div>
+
+          {layout.placedWords.sort((a,b) => a.id - b.id).map((wordObj) => {
+            const isActive = activeWordId === wordObj.id;
+            const isSolved = solvedWords.includes(wordObj.id);
+
+            return (
+              <div 
+                key={wordObj.id}
+                className={`
+                    p-4 rounded-xl border transition-all duration-200 cursor-pointer
+                    ${isActive ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200 shadow-md' : 'border-gray-200 bg-white hover:border-indigo-300'}
+                    ${isSolved ? 'opacity-60 bg-green-50 border-green-200' : ''}
+                `}
+                onClick={() => {
+                    setActiveWordId(wordObj.id);
+                    setDirection(wordObj.direction);
+                    setSelectedCell({ r: wordObj.row, c: wordObj.col });
+                    setGameMessage(null);
+                }}
+              >
+                <div className="flex justify-between items-start mb-2">
+                    <span className={`
+                        text-xs font-bold px-2 py-1 rounded uppercase tracking-wider
+                        ${wordObj.direction === 'horizontal' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}
+                    `}>
+                        {wordObj.direction === 'horizontal' ? 'По горизонтали' : 'По вертикали'}
+                    </span>
+                    {isSolved && <span className="text-xs font-bold text-green-600 flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Разгадано</span>}
+                </div>
+                
+                <p className="text-slate-700 font-medium leading-relaxed mb-3">
+                    {wordObj.desc}
+                </p>
+
+                <a 
+                    href={wordObj.videoUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-red-600 hover:text-red-700 hover:underline font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-full transition-colors w-fit"
+                    onClick={(e) => e.stopPropagation()} // Чтобы клик по ссылке не выбирал слово в сетке
+                >
+                    <PlayCircle className="w-4 h-4" />
+                    Посмотреть видео-подсказку
+                </a>
+              </div>
+            );
+          })}
+        </div>
+
+      </main>
+    </div>
+  );
+}
